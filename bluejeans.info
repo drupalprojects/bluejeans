@@ -1,0 +1,4 @@
+name = Blue Jeans
+description = Blue Jeans VTC integration.
+dependencies[] = date_popup
+core = 6.x
