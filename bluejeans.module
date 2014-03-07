@@ -28,7 +28,7 @@ function bluejeans_menu() {
     'title' => 'Synchronize Blue Jeans',
     'page callback' => 'bluejeans_conferences_sync',
     'page arguments' => array(1),
-    'access arguments' => array('administer bluejeans conference'),
+    'access callback' => 'bluejeans_debug_access',
     'type' => MENU_LOCAL_TASK,
   );
   $items['admin/config/services/bluejeans'] = array(
@@ -72,6 +72,13 @@ function bluejeans_conference_access($conference) {
   ", array(':id' => $conference->meeting_id))->fetchField();
   $node = node_load($nid);
   return node_access('view', $node);
+}
+
+/**
+ * Access function for debugging features.
+ */
+function bluejeans_debug_access() {
+  return variable_get('bluejeans_debug', FALSE) && user_access('administer bluejeans conference');
 }
 
 /**
@@ -130,6 +137,11 @@ function bluejeans_admin_settings() {
     '#multiple' => TRUE,
     '#options' => node_type_get_names(),
     '#default_value' => variable_get('bluejeans_types', array()),
+  );
+  $form['bluejeans_debug'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Debug Blue Jeans integration'),
+    '#default_value' => variable_get('bluejeans_debug', FALSE),
   );
   return system_settings_form($form);
 }
@@ -355,9 +367,6 @@ function bluejeans_theme() {
       'variables' => array('conference' => NULL, 'node' => NULL),
       'template' => 'conference',
     ),
-    'bluejeans_create_conference_link' => array(
-      'variables' => array('node' => NULL),
-    ),
   );
 }
 
@@ -389,21 +398,6 @@ function theme_bluejeans_conferences($variables) {
     $output = theme('item_list', array('items' => $items));
   }
   return $output;
-}
-
-/**
- * Theme function for `bluejeans_create_conference_link`.
- */
-function theme_bluejeans_create_conference_link($variables) {
-  $node = $variables['node'];
-  $create_conference = '';
-  if (user_access('administer bluejeans conference')) {
-    $create_conference = l(t('Schedule new conference'),
-      'conference/' . $node->nid . '/new',
-      array('query' => array('destination' => $_GET['q']))
-    );
-  }
-  return $create_conference;
 }
 
 /**
@@ -458,32 +452,65 @@ function _bluejeans_timezone_abbreviation($timezone_name) {
 function bluejeans_node_view($node, $view_mode, $langcode) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
     if ($view_mode === 'full') { // full mode
+      $links = array();
       $conferences = bluejeans_node_conferences_local($node);
       $node->content['conferences'] = array(
         '#markup' => theme('bluejeans_conferences', array('conferences' => $conferences, 'node' => $node)),
       );
-      $node->content['create_conference_link'] = array(
-        '#markup' => theme('bluejeans_create_conference_link', array('node' => $node)),
-      );
+      // New conference link.
+      if (user_access('administer bluejeans conference')) {
+        $links['conference_create_link'] = array(
+          'title' => t('Schedule new conference'),
+          'href' => 'conference/' . $node->nid . '/new',
+          'query' => array('destination' => url('node/' . $node->nid)),
+        );
+        $node->content['links']['conference_create'] = array(
+          '#theme' => 'links',
+          '#links' => $links,
+          '#attributes' => array('class' => array('links', 'inline')),
+        );
+      }
     }
     else if ($view_mode === 'teaser') { // teaser mode - show message for upcoming conference today
       $conferences = bluejeans_node_conferences_local($node, TRUE);
       if (!empty($conferences)) {
         $node->content['conferences'] = array(
           '#value' => theme('bluejeans_conferences_teaser', array('conferences' => $conferences, 'node' => $node)),
-          '#weight' => -100,
         );
       }
     }
   }
 }
 
+/**
+ * Implements hook_field_extra_fields().
+ */
+function bluejeans_field_extra_fields() {
+  $fields = array();
+  foreach(variable_get('bluejeans_types', array()) as $type) {
+    $fields['node'][$type]['display'] = array(
+      'conferences' => array(
+        'label' => t('Blue Jeans conferences'),
+        'description' => t('List of Blue Jeans conferences associated with this node.'),
+        'weight' => 0,
+      ),
+    );
+  }
+  return $fields;
+}
+
+/**
+ * Implements hook_node_delete().
+ */
 function bluejeans_node_delete($node) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
     // TODO delete associated meetings here and on BJN.
   }
 }
 
+/**
+ * Implements hook_node_insert().
+ */
 function bluejeans_node_insert($node) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
     // TODO: Synchronize conferences to node mappings when translations are created.
