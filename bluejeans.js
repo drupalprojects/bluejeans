@@ -3,35 +3,37 @@
 
 Drupal.BlueJeans = Drupal.BlueJeans || {};
 
-Drupal.behaviors.BlueJeans = function() {
+Drupal.behaviors.BlueJeans = {
+  attach: function(context, settings) {
 
-  // Loop over all conferences, updating their status.
-  $('.bluejeans-conference').not('.bluejeans-conference-processed').each(function() {
-    var $this = $(this);
-    $this.addClass('bluejeans-conference-processed');
-    var meetingId = $this.attr('data-meetingId');
-    // see bluejeans_preprocess_bluejeans_conference() for
-    // an explanation of why we add the 'key.' prefix here.
-    var meeting = Drupal.settings.BlueJeans.meetings['key.' + meetingId];
-    meeting.metadata = JSON.parse(meeting.metadata);
-    Drupal.BlueJeans.updateMeetingStatus(meeting, $this);
-  });
+    // Loop over all conferences, updating their status.
+    $('.bluejeans-conference').not('.bluejeans-conference-processed').each(function() {
+      var $this = $(this);
+      $this.addClass('bluejeans-conference-processed');
+      var meetingId = $this.attr('data-meetingId');
+      // see bluejeans_preprocess_bluejeans_conference() for
+      // an explanation of why we add the 'key.' prefix here.
+      var meeting = Drupal.settings.BlueJeans.meetings['key.' + meetingId];
+      meeting.metadata = JSON.parse(meeting.metadata);
+      Drupal.BlueJeans.updateMeetingStatus(meeting, $this);
+    });
 
-  $('ul.bluejeans-conference-actions a.conference-action-popup').live('click', function(e) {
-    // Prevent click from reaching default handler.
-    e.preventDefault();
+    $('ul.bluejeans-conference-actions a.conference-action-popup').live('click', function(e) {
+      // Prevent click from reaching default handler.
+      e.preventDefault();
 
-    // Open popup in a new window center screen and listen to its messages.
-    var width = 1024,
-        height = 768,
-        left  = ($(window).width()-width)/2,
-        top   = ($(window).height()-height)/2,
-        popup = window.open(
-          $(this).attr('href'), 
-          "popup-"+time(), 
-          "width="+width+",height="+height+",top="+top+",left="+left
-        );
-  });
+      // Open popup in a new window center screen and listen to its messages.
+      var width = 1024,
+          height = 768,
+          left  = ($(window).width()-width)/2,
+          top   = ($(window).height()-height)/2,
+          popup = window.open(
+            $(this).attr('href'), 
+            "popup-"+time(), 
+            "width="+width+",height="+height+",top="+top+",left="+left
+          );
+    });
+  }
 }
 
 /**

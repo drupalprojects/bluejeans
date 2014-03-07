@@ -1,4 +1,4 @@
-<div class="<?php print implode(' ', $classes); ?>" data-meetingId="<?php print $conference->meeting_id ?>">
+<div class="<?php print implode(' ', $classes_array); ?>" data-meetingId="<?php print $conference->meeting_id ?>">
 
 	<header>
 		<h4 class="bluejeans-conference-start">

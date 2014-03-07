@@ -4,88 +4,40 @@
  * Implements hook_schema().
  */
 function bluejeans_schema() {
-  return bluejeans_schema_6001();
+  return bluejeans_schema_7000();
 }
 
-function bluejeans_schema_6000() {
+function bluejeans_schema_7000() {
   $schema['bluejeans_conference'] = array(
-    'description' => t('BlueJeans conference table.'),
+    'description' => 'BlueJeans conference table.',
     'fields' => array(
       'meeting_id' => array(
-        'description' => t('BlueJeans meeting identifier.'),
-        'type' => 'int',
-        'not null' => TRUE,
-      ),
-      'nid' => array(
-        'description' => t('Node associated with conference.'),
+        'description' => 'BlueJeans meeting identifier.',
         'type' => 'int',
         'not null' => TRUE,
       ),
       'title' => array(
-        'description' => t('Conference title.'),
+        'description' => 'Conference title.',
         'type' => 'varchar',
         'length' => '255',
         'not null' => TRUE,
       ),
       'description' => array(
-        'description' => t('Conference agenda/description/greeting.'),
+        'description' => 'Conference agenda/description/greeting.',
         'type' => 'text',
       ),
       'start' => array(
-        'description' => t('Conference start datetime in UNIX format.'),
+        'description' => 'Conference start datetime in UNIX format.',
         'type' => 'int',
         'not null' => TRUE,
       ),
       'end' => array(
-        'description' => t('Conference end datetime in UNIX format.'),
+        'description' => 'Conference end datetime in UNIX format.',
         'type' => 'int',
         'not null' => TRUE,
       ),
       'metadata' => array(
-        'description' => t('Raw BlueJeans conference metadata (JSON-encoded).'),
-        'type' => 'text',
-        'not null' => TRUE,
-      ),
-    ),
-    'primary key' => array('meeting_id'),
-    'indexes' => array(
-      'nid' => array('nid'),
-    ),
-  );
-  return $schema;
-}
-
-function bluejeans_schema_6001() {
-  $schema['bluejeans_conference'] = array(
-    'description' => t('BlueJeans conference table.'),
-    'fields' => array(
-      'meeting_id' => array(
-        'description' => t('BlueJeans meeting identifier.'),
-        'type' => 'int',
-        'not null' => TRUE,
-      ),
-      'title' => array(
-        'description' => t('Conference title.'),
-        'type' => 'varchar',
-        'length' => '255',
-        'not null' => TRUE,
-      ),
-      'description' => array(
-        'description' => t('Conference agenda/description/greeting.'),
-        'type' => 'text',
-      ),
-      'start' => array(
-        'description' => t('Conference start datetime in UNIX format.'),
-        'type' => 'int',
-        'not null' => TRUE,
-      ),
-      'end' => array(
-        'description' => t('Conference end datetime in UNIX format.'),
-        'type' => 'int',
-        'not null' => TRUE,
-      ),
-      'metadata' => array(
-        'description' => t('Raw BlueJeans conference metadata (JSON-encoded).'),
+        'description' => 'Raw BlueJeans conference metadata (JSON-encoded).',
         'type' => 'text',
         'not null' => TRUE,
       ),
@@ -93,15 +45,15 @@ function bluejeans_schema_6001() {
     'primary key' => array('meeting_id'),
   );
   $schema['bluejeans_conferences_nodes'] = array(
-    'description' => t('BlueJeans conferences to nodes mapping table.'),
+    'description' => 'BlueJeans conferences to nodes mapping table.',
     'fields' => array(
       'meeting_id' => array(
-        'description' => t('BlueJeans meeting identifier.'),
+        'description' => 'BlueJeans meeting identifier.',
         'type' => 'int',
         'not null' => TRUE,
       ),
       'nid' => array(
-        'description' => t('Node associated with conference.'),
+        'description' => 'Node associated with conference.',
         'type' => 'int',
         'not null' => TRUE,
       ),
@@ -109,40 +61,4 @@ function bluejeans_schema_6001() {
     'primary key' => array('meeting_id', 'nid'),
   );
   return $schema;
-}
-
-/**
- * Implements hook_install().
- */
-function bluejeans_install() {
-  drupal_install_schema('bluejeans');
-}
-
-/**
- * Implements hook_uninstall().
- */
-function bluejeans_uninstall() {
-  drupal_uninstall_schema('bluejeans');
-}
-
-function bluejeans_update_6001() {
-  $ret = array();
-
-  // Install mapping table.
-  $new_schema = bluejeans_schema_6001();
-  db_create_table($ret, 'bluejeans_conferences_nodes', $new_schema['bluejeans_conferences_nodes']);
-
-  // Copy meeting to nid mappings to new table, including translations.
-  db_query("
-    INSERT INTO {bluejeans_conferences_nodes}
-    SELECT c.meeting_id, nt.nid 
-    FROM {bluejeans_conference} c LEFT JOIN {node} n ON n.nid = c.nid
-    LEFT JOIN {node} nt ON nt.tnid = n.tnid
-  ");
-
-  // Clean up conference tables.
-  db_drop_index($ret, 'bluejeans_conference', 'nid');
-  db_drop_field($ret, 'bluejeans_conference', 'nid');
-
-  return $ret;
 }
