@@ -462,7 +462,7 @@ function bluejeans_node_view($node, $view_mode, $langcode) {
         $links['conference_create_link'] = array(
           'title' => t('Schedule new conference'),
           'href' => 'conference/' . $node->nid . '/new',
-          'query' => array('destination' => url('node/' . $node->nid)),
+          'query' => array('destination' => 'node/' . $node->nid),
         );
         $node->content['links']['conference_create'] = array(
           '#theme' => 'links',
@@ -475,7 +475,7 @@ function bluejeans_node_view($node, $view_mode, $langcode) {
       $conferences = bluejeans_node_conferences_local($node, TRUE);
       if (!empty($conferences)) {
         $node->content['conferences'] = array(
-          '#value' => theme('bluejeans_conferences_teaser', array('conferences' => $conferences, 'node' => $node)),
+          '#markup' => theme('bluejeans_conferences_teaser', array('conferences' => $conferences, 'node' => $node)),
         );
       }
     }
@@ -645,7 +645,7 @@ function bluejeans_conferences_remote($sync = FALSE) {
  * @param object $node
  *   Node object
  * @param bool $today
- *   (optional) Flag to only return today's active conferences
+ *   (optional) Flag to only return today's active or upcoming conferences
  * @return array
 *    Array of conference objects associated with given node, can be empty
  */
