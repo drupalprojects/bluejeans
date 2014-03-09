@@ -340,7 +340,7 @@ function bluejeans_conference_form_submit($form, $form_state) {
  * Implementation of hook_bluejeans_conference().
  */
 function bluejeans_bluejeans_conference($op, $conference) {
-  if ($op == 'insert' && module_exists('translation')) {
+  if ($op === 'insert' && module_exists('translation')) {
     // Insert same conference for translated nodes.
     $node = node_load($conference->nid);
     if (!empty($node->tnid)) foreach (translation_node_get_translations($node->tnid) as $translation) {
