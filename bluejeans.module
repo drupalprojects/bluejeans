@@ -138,6 +138,18 @@ function bluejeans_admin_settings() {
     '#options' => node_type_get_names(),
     '#default_value' => variable_get('bluejeans_types', array()),
   );
+  $node_info = entity_get_info('node');
+  $view_modes = array();
+  foreach ($node_info['view modes'] as $key => $info) {
+    $view_modes[$key] = $info['label'];
+  }
+  $form['bluejeans_view_modes_links'] = array(
+    '#type' => 'select',
+    '#title' => t('View modes to show "Create new conference" link'),
+    '#multiple' => TRUE,
+    '#options' => $view_modes,
+    '#default_value' => variable_get('bluejeans_view_modes_links', array('full')),
+  );
   $form['bluejeans_debug'] = array(
     '#type' => 'checkbox',
     '#title' => t('Debug Blue Jeans integration'),
@@ -451,33 +463,35 @@ function _bluejeans_timezone_abbreviation($timezone_name) {
  */
 function bluejeans_node_view($node, $view_mode, $langcode) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
-    if ($view_mode === 'full') { // full mode
-      $links = array();
-      $conferences = bluejeans_node_conferences_local($node);
-      $node->content['conferences'] = array(
-        '#markup' => theme('bluejeans_conferences', array('conferences' => $conferences, 'node' => $node)),
-      );
-      // New conference link.
-      if (user_access('administer bluejeans conference')) {
-        $links['conference_create_link'] = array(
-          'title' => t('Schedule new conference'),
-          'href' => 'conference/' . $node->nid . '/new',
-          'query' => array('destination' => 'node/' . $node->nid),
-        );
-        $node->content['links']['conference_create'] = array(
-          '#theme' => 'links',
-          '#links' => $links,
-          '#attributes' => array('class' => array('links', 'inline')),
-        );
-      }
-    }
-    else if ($view_mode === 'teaser') { // teaser mode - show message for upcoming conference today
+    // Conference list.
+    if ($view_mode === 'teaser') { // teaser mode - show message for active or upcoming conferences only
       $conferences = bluejeans_node_conferences_local($node, TRUE);
       if (!empty($conferences)) {
         $node->content['conferences'] = array(
           '#markup' => theme('bluejeans_conferences_teaser', array('conferences' => $conferences, 'node' => $node)),
         );
       }
+    }
+    else { // full mode or any custom mode - show full conferences list
+      $conferences = bluejeans_node_conferences_local($node);
+      if (!empty($conferences)) {
+        $node->content['conferences'] = array(
+          '#markup' => theme('bluejeans_conferences', array('conferences' => $conferences, 'node' => $node)),
+        );
+      }
+    }
+    // New conference link.
+    if (user_access('administer bluejeans conference') && in_array($view_mode, variable_get('bluejeans_view_modes_links', array('full')))) {
+      $links['conference_create_link'] = array(
+        'title' => t('Schedule new conference'),
+        'href' => 'conference/' . $node->nid . '/new',
+        'query' => array('destination' => 'node/' . $node->nid),
+      );
+      $node->content['links']['conference_create'] = array(
+        '#theme' => 'links',
+        '#links' => $links,
+        '#attributes' => array('class' => array('links', 'inline')),
+      );
     }
   }
 }
