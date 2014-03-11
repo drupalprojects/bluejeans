@@ -179,39 +179,43 @@ function bluejeans_conference_delete($form, &$form_state, $node, $conference) {
 function bluejeans_conference_delete_submit($form, &$form_state) {
   if ($form_state['values']['confirm']) {
     $conference = $form['#conference'];
-
-    if (!bluejeans_authenticate()) {
-      // TODO inform user of failure
-      return;
-    }
-
-    // Cancel remote meeting.
-    $response = drupal_http_request(
-      url(BLUEJEANS_ENDPOINT . '/v1/user/' . $_SESSION['bluejeans']->user->id . '/scheduled_meeting/' . $conference->meeting_id,
-        array('absolute' => TRUE, 'query' => array('access_token' => $_SESSION['bluejeans']->access_token))
-      ),
-      array('method' => 'DELETE')
-    );
-    if ($response->code != 200) {
-      // TODO watchdog response error
-      // TODO inform user of failure
-      return;
-    }
-
-    // Delete local copy.
-    db_delete('bluejeans_conferences_nodes')
-      ->condition('meeting_id', $conference->meeting_id)
-      ->execute();
-    db_delete('bluejeans_conference')
-      ->condition('meeting_id', $conference->meeting_id)
-      ->execute();
-
-    // Inform other modules we've deleted a conference.
-    module_invoke_all('bluejeans_conference', 'delete', $conference);
-
-    // Inform user.
+    _bluejeans_conference_delete($conference);
     drupal_set_message(t('Canceled conference %title.', array('%title' => $conference->title)));
   }
+}
+
+/**
+ * Helper function to delete conference locally and remotely.
+ */
+function _bluejeans_conference_delete($conference) {
+  if (!bluejeans_authenticate()) {
+    // TODO inform user of failure
+    return;
+  }
+
+  // Cancel remote meeting.
+  $response = drupal_http_request(
+    url(BLUEJEANS_ENDPOINT . '/v1/user/' . $_SESSION['bluejeans']->user->id . '/scheduled_meeting/' . $conference->meeting_id,
+      array('absolute' => TRUE, 'query' => array('access_token' => $_SESSION['bluejeans']->access_token))
+    ),
+    array('method' => 'DELETE')
+  );
+  if ($response->code != 200) {
+    // TODO watchdog response error
+    // TODO inform user of failure
+    return;
+  }
+
+  // Delete local copy.
+  db_delete('bluejeans_conferences_nodes')
+    ->condition('meeting_id', $conference->meeting_id)
+    ->execute();
+  db_delete('bluejeans_conference')
+    ->condition('meeting_id', $conference->meeting_id)
+    ->execute();
+
+  // Inform other modules we've deleted a conference.
+  module_invoke_all('bluejeans_conference', 'delete', $conference); 
 }
 
 /**
@@ -518,7 +522,14 @@ function bluejeans_field_extra_fields() {
  */
 function bluejeans_node_delete($node) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
-    // TODO delete associated meetings here and on BJN.
+    $found = FALSE;
+    foreach (bluejeans_node_conferences_local($node) as $conference) {
+      _bluejeans_conference_delete($conference);
+      $found = TRUE;
+    }
+    if ($found) {
+      drupal_set_message(t('Deleted conferences for node %title.', array('%title' => $node->title)));
+    }
   }
 }
 
