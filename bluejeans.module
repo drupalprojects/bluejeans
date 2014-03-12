@@ -537,8 +537,14 @@ function bluejeans_node_delete($node) {
  * Implements hook_node_insert().
  */
 function bluejeans_node_insert($node) {
-  if (in_array($node->type, variable_get('bluejeans_types', array()))) {
-    // TODO: Synchronize conferences to node mappings when translations are created.
+  if (in_array($node->type, variable_get('bluejeans_types', array())) && module_exists('translation')) {
+    if (!empty($node->translation_source)) {
+      $source = node_load($node->translation_source->nid);
+      foreach (bluejeans_node_conferences_local($source) as $conference) {
+        $conference->nid = $node->nid;
+        drupal_write_record('bluejeans_conferences_nodes', $conference);
+      }
+    }
   }
 }
 
