@@ -6,6 +6,9 @@
 			<span class="bluejeans-conference-start-time"><?php print $start_time; ?></span>
 		</h4>
 		<div class="bluejeans-conference-title"><?php print $title ?></div>
+		<div class="bluejeans-conference-messages">
+			<?php // to be filled by front-end ?>
+		</div>
 	</header>
 
 	<?php if ($description) : ?>

@@ -15,14 +15,15 @@ Drupal.behaviors.BlueJeans = {
       // an explanation of why we add the 'key.' prefix here.
       var meeting = Drupal.settings.BlueJeans.meetings['key.' + meetingId];
       meeting.metadata = JSON.parse(meeting.metadata);
-      Drupal.BlueJeans.updateMeetingStatus(meeting, $this);
+      meeting.$container = $this;
+      Drupal.BlueJeans.updateMeetingStatus(meeting);
     });
 
     $('ul.bluejeans-conference-actions a.conference-action-popup').live('click', function(e) {
       // Prevent click from reaching default handler.
       e.preventDefault();
 
-      // Open popup in a new window center screen and listen to its messages.
+      // Open popup in a new window center screen.
       var width = 1024,
           height = 768,
           left  = ($(window).width()-width)/2,
@@ -45,10 +46,15 @@ Drupal.BlueJeans.getMeetingStatus = function(meeting, fn) {
     url: Drupal.settings.basePath + 'bluejeans/conference/' + meeting.meeting_id + '/status',
     dataType: 'json',
     success: function(data) {
-      fn(data.status);
+      if (typeof(data.error) != 'undefined') {
+        Drupal.BlueJeans.displayMessage(data.error, 'error', meeting.$container); 
+      }
+      else {
+        fn(data.status);
+      }
     },
     error: function(x,t,e) {
-      // TODO inform user of failure
+      Drupal.BlueJeans.displayMessage((t ? (t+': ') : '') + e, 'error', meeting.$container);
     }
   });
 }
@@ -57,19 +63,33 @@ Drupal.BlueJeans.getMeetingEndpoints = function(meeting, fn) {
     url: Drupal.settings.basePath + 'bluejeans/conference/' + meeting.meeting_id + '/endpoints',
     dataType: 'json',
     success: function(data) {
-      fn(data);
+      if (typeof(data.error) != 'undefined') {
+        Drupal.BlueJeans.displayMessage(data.error, 'error', meeting.$container);
+      }
+      else {
+        fn(data);
+      }
     },
     error: function(x,t,e) {
-      // TODO inform user of failure
+      Drupal.BlueJeans.displayMessage((t ? (t+': ') : '') + e, 'error', meeting.$container);
     }
   });
+}
+
+/**
+ * Display status message.
+ */
+Drupal.BlueJeans.displayMessage = function(message, type, $container) {
+  $('.bluejeans-conference-messages', $container).append(
+    $('<div />', { class: "messages " + type }).text(message)
+  );
 }
 
 /**
  * Update meeting status and affordances based on its internal state:
  * upcoming, pending start, active, finished.
  */
-Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
+Drupal.BlueJeans.updateMeetingStatus = function(meeting) {
   var clss = 'conference-status-unknown';
   var text = Drupal.t('refreshing status...');
   var actions = [];
@@ -80,7 +100,7 @@ Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
     text = Drupal.t('upcoming');
     // Schedule this function again when the time comes for the meeting.
     setTimeout(
-      function() { Drupal.BlueJeans.updateMeetingStatus(meeting, $container); },
+      function() { Drupal.BlueJeans.updateMeetingStatus(meeting, meeting.$container); },
       Math.max(0, 1000 * (meeting.start - time())) // in milliseconds
     );
     // If meeting owner, afford canceling meeting.
@@ -109,8 +129,8 @@ Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
 
     // TODO Show countdown to meeting start.
 
-    Drupal.BlueJeans.updateMeetingStatusUI($container, clss, text);
-    Drupal.BlueJeans.updateMeetingActionsUI($container, actions);
+    Drupal.BlueJeans.updateMeetingStatusUI(meeting.$container, clss, text);
+    Drupal.BlueJeans.updateMeetingActionsUI(meeting.$container, actions);
   }
   else {
     // Meeting is about to start, is active, or has terminated: find out which.
@@ -142,20 +162,20 @@ Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
             clss = 'conference-status-active';
             text = Drupal.t('active');
 
-            Drupal.BlueJeans.updateMeetingStatusUI($container, clss, text);
-            Drupal.BlueJeans.updateMeetingActionsUI($container, actions);
+            Drupal.BlueJeans.updateMeetingStatusUI(meeting.$container, clss, text);
+            Drupal.BlueJeans.updateMeetingActionsUI(meeting.$container, actions);
           }
           else {
             // Show user is connected.
             clss = 'conference-status-connected conference-status-active';
             text = Drupal.t('connected');
 
-            Drupal.BlueJeans.updateMeetingStatusUI($container, clss, text);
+            Drupal.BlueJeans.updateMeetingStatusUI(meeting.$container, clss, text);
           }
                   
           // Update status every 15 seconds.
           setTimeout(
-            function() { Drupal.BlueJeans.updateMeetingStatus(meeting, $container); },
+            function() { Drupal.BlueJeans.updateMeetingStatus(meeting); },
             15000 // in milliseconds
           );
         });
@@ -168,7 +188,7 @@ Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
           text = Drupal.t('ready to start');
           // Update status every 15 seconds.
           setTimeout(
-            function() { Drupal.BlueJeans.updateMeetingStatus(meeting, $container); },
+            function() { Drupal.BlueJeans.updateMeetingStatus(meeting); },
             15000 // in milliseconds
           );
           // If meeting owner, afford starting meeting.
@@ -191,8 +211,8 @@ Drupal.BlueJeans.updateMeetingStatus = function(meeting, $container) {
         }
       }
 
-      Drupal.BlueJeans.updateMeetingStatusUI($container, clss, text);
-      Drupal.BlueJeans.updateMeetingActionsUI($container, actions);
+      Drupal.BlueJeans.updateMeetingStatusUI(meeting.$container, clss, text);
+      Drupal.BlueJeans.updateMeetingActionsUI(meeting.$container, actions);
     });
   }
 }

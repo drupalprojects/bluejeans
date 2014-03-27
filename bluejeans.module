@@ -107,7 +107,7 @@ function bluejeans_conference_load($meeting_id) {
  */
 function bluejeans_conferences_sync($node) {
   bluejeans_conferences_remote(TRUE);
-  drupal_set_message(t('Synchonized conferences with Blue Jeans.'));
+  drupal_set_message(t('Synchronized conferences with Blue Jeans.'));
   drupal_goto('node/' . $node->nid);
   return '';
 }
@@ -120,16 +120,19 @@ function bluejeans_admin_settings() {
     '#type' => 'textfield',
     '#title' => t('Blue Jeans OAuth appkey'),
     '#default_value' => variable_get('bluejeans_appkey', ''),
+    '#required' => TRUE,
   );
   $form['bluejeans_appsecret'] = array(
     '#type' => 'textfield',
     '#title' => t('Blue Jeans OAuth app secret'),
     '#default_value' => variable_get('bluejeans_appsecret', ''),
+    '#required' => TRUE,
   );
   $form['bluejeans_username'] = array(
     '#type' => 'textfield',
     '#title' => t('Blue Jeans username'),
     '#default_value' => variable_get('bluejeans_username', ''),
+    '#required' => TRUE,
   );
   $form['bluejeans_types'] = array(
     '#type' => 'select',
@@ -179,8 +182,9 @@ function bluejeans_conference_delete($form, &$form_state, $node, $conference) {
 function bluejeans_conference_delete_submit($form, &$form_state) {
   if ($form_state['values']['confirm']) {
     $conference = $form['#conference'];
-    _bluejeans_conference_delete($conference);
-    drupal_set_message(t('Canceled conference %title.', array('%title' => $conference->title)));
+    if (_bluejeans_conference_delete($conference)) {
+      drupal_set_message(t('Canceled conference %title.', array('%title' => $conference->title)));
+    }
   }
 }
 
@@ -189,8 +193,8 @@ function bluejeans_conference_delete_submit($form, &$form_state) {
  */
 function _bluejeans_conference_delete($conference) {
   if (!bluejeans_authenticate()) {
-    // TODO inform user of failure
-    return;
+    drupal_set_message(t('Could not authenticate to Blue Jeans. Operation aborted.'), 'error');
+    return FALSE;
   }
 
   // Cancel remote meeting.
@@ -201,9 +205,14 @@ function _bluejeans_conference_delete($conference) {
     array('method' => 'DELETE')
   );
   if ($response->code != 200) {
-    // TODO watchdog response error
-    // TODO inform user of failure
-    return;
+    watchdog('bluejeans', 'Error deleting conference: !code !error',
+      array('!code' => $response->code, '!error' => $response->error),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Could not delete conference %title because a Blue Jeans error occurred: !code !error', 
+      array('%title' => $conference->title, '!code' => $response->code, '!error' => $response->error)
+    ), 'error');
+    return FALSE;
   }
 
   // Delete local copy.
@@ -216,6 +225,8 @@ function _bluejeans_conference_delete($conference) {
 
   // Inform other modules we've deleted a conference.
   module_invoke_all('bluejeans_conference', 'delete', $conference); 
+
+  return TRUE;
 }
 
 /**
@@ -285,7 +296,7 @@ function bluejeans_conference_form_validate($form, $form_state) {
  */
 function bluejeans_conference_form_submit($form, $form_state) {
   if (!bluejeans_authenticate()) {
-    // TODO inform user of failure
+    drupal_set_message(t('Could not authenticate to Blue Jeans. Operation aborted.'), 'error');
     return;
   }
 
@@ -314,7 +325,13 @@ function bluejeans_conference_form_submit($form, $form_state) {
     )
   );
   if ($response->code >= 300) { 
-    form_set_error('', t('BlueJeans error: !error', array('!error' => $response->data)));
+    watchdog('bluejeans', 'Error creating conference: !code !error',
+      array('!code' => $response->code, '!error' => $response->error),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Could not create conference %title because a Blue Jeans error occurred: !code !error',
+      array('%title' => $conference->title, '!code' => $response->code, '!error' => $response->error)
+    ), 'error');
     return;
   }
   $meeting_id = json_decode($response->data);
@@ -327,7 +344,14 @@ function bluejeans_conference_form_submit($form, $form_state) {
     )
   );
   if ($response->code != 200) {
-    // TODO watchdog response error
+    watchdog('bluejeans', 'Error fetching conference metadata: !code !error',
+      array('!code' => $response->code, '!error' => $response->error),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Could not create fetch conference data because a Blue Jeans error occurred: !code !error',
+      array('!code' => $response->code, '!error' => $response->error)
+    ), 'error');
+    $response->data = array();
   }
   $conference->metadata = $response->data;
 
@@ -395,7 +419,8 @@ function theme_bluejeans_conferences($variables) {
   $output = '';
   if (!empty($conferences)) {
     if (!bluejeans_authenticate()) {
-      // TODO display user error
+      drupal_set_message(t('Could not authenticate to Blue Jeans. Display aborted.'), 'error');
+      return $output;
     }
     global $user;
     global $language;
@@ -524,8 +549,7 @@ function bluejeans_node_delete($node) {
   if (in_array($node->type, variable_get('bluejeans_types', array()))) {
     $found = FALSE;
     foreach (bluejeans_node_conferences_local($node) as $conference) {
-      _bluejeans_conference_delete($conference);
-      $found = TRUE;
+      $found = _bluejeans_conference_delete($conference);
     }
     if ($found) {
       drupal_set_message(t('Deleted conferences for node %title.', array('%title' => $node->title)));
@@ -575,7 +599,11 @@ function bluejeans_authenticate($force = FALSE) {
   );
   if ($response->code != 200) {
     unset($_SESSION['bluejeans']);
-    // TODO watchdog response error
+    watchdog('bluejeans', 
+      'Authentication failed: !code !error. Cannot continue authentication process.', 
+      array('!error' => $response->error, '!code' => $response->code), 
+      WATCHDOG_ERROR
+    );
     return FALSE;
   }
   $_SESSION['bluejeans'] = json_decode($response->data);
@@ -591,13 +619,21 @@ function bluejeans_authenticate($force = FALSE) {
   );
   if ($response->code != 200) {
     unset($_SESSION['bluejeans']);
-    // TODO watchdog response error
+    watchdog('bluejeans', 
+      'Error fetching user list: !code !error. Cannot continue authentication process.',
+      array('!error' => $response->error, '!code' => $response->code), 
+      WATCHDOG_ERROR
+    );
     return FALSE;
   }
   $users = json_decode($response->data);
   if (empty($users->count)) {
     unset($_SESSION['bluejeans']);
-    // TODO watchdog user not found
+    watchdog('bluejeans', 
+      'No users found. Cannot continue authentication process.', 
+      array(), 
+      WATCHDOG_ERROR
+    );
     return FALSE;
   }
   foreach($users->users as $user) {
@@ -617,7 +653,11 @@ function bluejeans_authenticate($force = FALSE) {
   }
   if (empty($_SESSION['bluejeans']->user)) {
     unset($_SESSION['bluejeans']);
-    // TODO watchdog user not found
+    watchdog('bluejeans', 
+      'User !user not found. Cannot continue authentication process.', 
+      array('!user' => variable_get('bluejeans_username', t('[empty username]'))), 
+      WATCHDOG_ERROR
+    );    
     return FALSE; 
   }
   
@@ -628,7 +668,13 @@ function bluejeans_authenticate($force = FALSE) {
     )
   );
   if ($response->code != 200) {
-    // TODO watchdog response error
+    unset($_SESSION['bluejeans']);
+    watchdog('bluejeans', 
+      'Error fetching user room: !code !error. Cannot continue authentication process.', 
+      array('!code' => $response->code, '!error' => $response->error), 
+      WATCHDOG_ERROR
+    );    
+    return FALSE;   
   }
   $_SESSION['bluejeans']->user->room = json_decode($response->data);
 
@@ -649,7 +695,11 @@ function bluejeans_conferences_remote($sync = FALSE) {
     )
   );
   if ($response->code != 200) {
-    // TODO watchdog response error
+    watchdog('bluejeans', 'Error fetching conferences: !code !error',
+      array('!code' => $response->code, '!error' => $response->error),
+      WATCHDOG_ERROR
+    );
+    return array();
   }
   $conferences = json_decode($response->data);
 
@@ -697,7 +747,7 @@ function bluejeans_node_conferences_local($node, $today = FALSE) {
  */
 function bluejeans_conference_status($conference) {
   if (!bluejeans_authenticate()) {
-    // TODO return JSON error
+    drupal_json_output((object)array('error' => t('Could not authenticate to Blue Jeans. Operation aborted.')));
     exit;
   }
 
@@ -715,8 +765,13 @@ function bluejeans_conference_status($conference) {
       exit;
     }
     else {
-      // TODO watchdog response error
-      // TODO return JSON error
+      watchdog('bluejeans', 'Error fetching conference status: !code !error',
+        array('!code' => $response->code, '!error' => $response->error),
+        WATCHDOG_ERROR
+      );
+      drupal_json_output((object)array('error' => t('Could not fetch conference status: !code !error',
+        array('!code' => $response->code, '!error' => $response->error)
+      )));
       exit;
     }
   }
@@ -729,7 +784,7 @@ function bluejeans_conference_status($conference) {
  */
 function bluejeans_conference_endpoints($conference) {
   if (!bluejeans_authenticate()) {
-    // TODO return JSON error
+    drupal_json_output((object)array('error' => t('Could not authenticate to Blue Jeans. Operation aborted.')));
     exit;
   }
 
@@ -741,8 +796,13 @@ function bluejeans_conference_endpoints($conference) {
     )
   );
   if ($response->code != 200) {
-    // TODO watchdog response error
-    // TODO return JSON error
+    watchdog('bluejeans', 'Error fetching conference endpoints: !code !error',
+      array('!code' => $response->code, '!error' => $response->error),
+      WATCHDOG_ERROR
+    );
+    drupal_json_output((object)array('error' => t('Could not fetch conference participants: !code !error',
+      array('!code' => $response->code, '!error' => $response->error)
+    )));
     exit;
   }
   drupal_json_output(json_decode($response->data)); // response arrives already JSON-encoded
